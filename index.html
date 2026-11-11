@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Indbrud i østjyske kommuner 2025 og 2026</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1: #ffffff;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #6f6e69;
+    --grid: #e6e5e0;
+    --y2025: #86b6ef;
+    --y2026: #256abf;
+    --up: #0b0b0b;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--surface-1);
+    color: var(--text-primary);
+    margin: 0;
+    padding: 16px 12px 12px;
+    max-width: 720px;
+  }
+  body { margin: 0; background: #fff; }
+  h1 { font-size: 20px; line-height: 1.25; margin: 0 0 6px; }
+  .dek { font-size: 15px; color: var(--text-secondary); margin: 0 0 14px; line-height: 1.4; }
+  .total { font-size: 15px; margin: 0 0 14px; }
+  .total b { font-size: 17px; }
+  .legend { display: flex; gap: 16px; font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .chart { display: grid; grid-template-columns: 82px 1fr 56px; column-gap: 10px; row-gap: 14px; align-items: center; }
+  .head { font-size: 12px; color: var(--text-muted); }
+  .head.r { text-align: right; }
+  .name { font-size: 14px; font-weight: 600; }
+  .bars { display: flex; flex-direction: column; gap: 2px; }
+  .row { display: flex; align-items: center; gap: 6px; height: 16px; cursor: default; }
+  .bar { height: 14px; border-radius: 0 4px 4px 0; min-width: 2px; transition: opacity .15s; }
+  .row:hover .bar { opacity: .8; }
+  .val { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .row.y26 .val { color: var(--text-primary); font-weight: 600; }
+  .chg { font-size: 14px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+  .note { font-size: 12px; color: var(--text-muted); margin-top: 14px; line-height: 1.45; }
+  details { font-size: 13px; margin-top: 10px; color: var(--text-secondary); }
+  summary { cursor: pointer; }
+  table { border-collapse: collapse; margin-top: 8px; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--grid); }
+  th:first-child, td:first-child { text-align: left; }
+  .tip { position: fixed; pointer-events: none; background: #0b0b0b; color: #fff; font-size: 12px;
+         padding: 6px 8px; border-radius: 6px; opacity: 0; transition: opacity .1s; line-height: 1.4; z-index: 10; }
+  @media (max-width: 420px) {
+    .chart { grid-template-columns: 70px 1fr 48px; column-gap: 8px; }
+    .name { font-size: 13px; }
+    h1 { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+<div class="viz-root" id="viz">
+  <h1>Flere indbrud i Aarhus, færre på Djursland</h1>
+  <p class="dek">Anmeldte indbrud i samme 10 måneder i 2025 og 2026, fordelt på kommune.</p>
+  <p class="total" id="total"></p>
+  <div class="legend" aria-hidden="true">
+    <span><i class="sw" style="background:var(--y2025)"></i>2025</span>
+    <span><i class="sw" style="background:var(--y2026)"></i>2026</span>
+  </div>
+  <div class="chart" id="chart" role="img" aria-label="Søjlediagram over anmeldte indbrud pr. kommune i 2025 og 2026. Se tabellen nedenfor for tallene."></div>
+  <details>
+    <summary>Se tallene som tabel</summary>
+    <table id="tbl"></table>
+  </details>
+  <p class="note" id="note"></p>
+</div>
+<div class="tip" id="tip"></div>
+<script>
+  // ===== Ret tal og tekst her =====
+  const DATA = [
+    { kommune: "Aarhus",    y2025: 956, y2026: 1239 },
+    { kommune: "Randers",   y2025: 205, y2026: 212 },
+    { kommune: "Favrskov",  y2025: 115, y2026: 123 },
+    { kommune: "Norddjurs", y2025: 137, y2026: 102 },
+    { kommune: "Syddjurs",  y2025: 89,  y2026: 77 }
+  ];
+  const I_ALT = { y2025: 1502, y2026: 1757 };
+  const NOTE = "I alt omfatter de fem viste kommuner. I 2026 indgår desuden 4 anmeldelser uden kendt kommune. Kilde: Østjyllands Politi";
+  // =================================
+
+  const fmt = n => n.toLocaleString("da-DK");
+  const pct = (a, b) => Math.round((b - a) / a * 100);
+  const sign = p => (p > 0 ? "+" : p < 0 ? "−" : "") + Math.abs(p) + " %";
+  const max = Math.max(...DATA.flatMap(d => [d.y2025, d.y2026]));
+  const chart = document.getElementById("chart");
+  const tip = document.getElementById("tip");
+
+  chart.innerHTML =
+    '<div class="head"></div><div class="head">Antal anmeldelser</div><div class="head r">Ændring</div>';
+
+  DATA.forEach(d => {
+    const p = pct(d.y2025, d.y2026);
+    const tipText = `<b>${d.kommune}</b><br>2025: ${fmt(d.y2025)}<br>2026: ${fmt(d.y2026)}<br>Ændring: ${sign(p)}`;
+    const row = (cls, v, color) =>
+      `<div class="row ${cls}" data-tip="${encodeURIComponent(tipText)}">
+         <div class="bar" style="width:calc((100% - 52px) * ${v / max});background:${color}"></div>
+         <span class="val">${fmt(v)}</span>
+       </div>`;
+    chart.insertAdjacentHTML("beforeend",
+      `<div class="name">${d.kommune}</div>
+       <div class="bars">${row("y25", d.y2025, "var(--y2025)")}${row("y26", d.y2026, "var(--y2026)")}</div>
+       <div class="chg">${sign(p)}</div>`);
+  });
+
+  document.getElementById("tbl").innerHTML =
+    "<thead><tr><th>Kommune</th><th>2025</th><th>2026</th><th>Ændring</th></tr></thead><tbody>" +
+    DATA.map(d => `<tr><td>${d.kommune}</td><td>${fmt(d.y2025)}</td><td>${fmt(d.y2026)}</td><td>${sign(pct(d.y2025, d.y2026))}</td></tr>`).join("") +
+    `<tr><td><b>I alt</b></td><td><b>${fmt(I_ALT.y2025)}</b></td><td><b>${fmt(I_ALT.y2026)}</b></td><td><b>${sign(pct(I_ALT.y2025, I_ALT.y2026))}</b></td></tr></tbody>`;
+  document.getElementById("note").textContent = NOTE;
+  document.getElementById("total").innerHTML =
+    `I alt: ${fmt(I_ALT.y2025)} anmeldelser i 2025 og <b>${fmt(I_ALT.y2026)}</b> i 2026 (<b>${sign(pct(I_ALT.y2025, I_ALT.y2026))}</b>)`;
+
+  chart.addEventListener("mousemove", e => {
+    const r = e.target.closest(".row");
+    if (!r) { tip.style.opacity = 0; return; }
+    tip.innerHTML = decodeURIComponent(r.dataset.tip);
+    const x = Math.min(e.clientX + 12, window.innerWidth - tip.offsetWidth - 8);
+    tip.style.left = x + "px";
+    tip.style.top = (e.clientY + 12) + "px";
+    tip.style.opacity = 1;
+  });
+  chart.addEventListener("mouseleave", () => tip.style.opacity = 0);
+
+  // Fortæl en eventuel forælderside, hvor høj grafen er (til auto-højde i iframe)
+  const sendH = () => parent.postMessage({ type: "indbrud-height", height: document.body.scrollHeight }, "*");
+  window.addEventListener("load", sendH);
+  new ResizeObserver(sendH).observe(document.body);
+</script>
+</body>
+</html>
